@@ -1,4 +1,5 @@
-import streamlit as st
+from flask import Flask, request, render_template
+app = Flask(__name__)
 
 # Define emission factors (example values, replace with accurate data)
 EMISSION_FACTORS = {
@@ -22,73 +23,47 @@ EMISSION_FACTORS = {
     }
 }
 
-# Set wide layout and page name
-st.set_page_config(layout="wide", page_title="Personal Carbon Calculator")
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    if request.method == 'POST':
+        country = request.form['country']
+        distance = float(request.form['distance'])
+        electricity = float(request.form['electricity'])
+        waste = float(request.form['waste'])
+        meals = int(request.form['meals'])
+        
+        # Normalize inputs
+        distance *= 365  # Convert daily distance to yearly
+        electricity *= 12  # Convert monthly electricity to yearly
+        meals *= 365  # Convert daily meals to yearly
+        waste *= 52  # Convert weekly waste to yearly
 
-# Streamlit app code
-st.title("Personal Carbon Calculator App ⚠️")
+        # Calculate carbon emissions
+        factors = EMISSION_FACTORS[country]
+        transportation_emissions = factors["Transportation"] * distance
+        electricity_emissions = factors["Electricity"] * electricity
+        diet_emissions = factors["Diet"] * meals
+        waste_emissions = factors["Waste"] * waste
 
-# User inputs
-st.subheader("🌍 Your Country")
-country = st.selectbox("Select", list(EMISSION_FACTORS.keys()))
+        # Convert emissions to tonnes and round off to 2 decimal points
+        transportation_emissions = round(transportation_emissions / 1000, 2)
+        electricity_emissions = round(electricity_emissions / 1000, 2)
+        diet_emissions = round(diet_emissions / 1000, 2)
+        waste_emissions = round(waste_emissions / 1000, 2)
 
-col1, col2 = st.columns(2)
+        # Calculate total emissions
+        total_emissions = round(
+            transportation_emissions + electricity_emissions + diet_emissions + waste_emissions, 2
+        )
+        
+        return render_template('results.html', 
+                               transportation_emissions=transportation_emissions,
+                               electricity_emissions=electricity_emissions,
+                               diet_emissions=diet_emissions,
+                               waste_emissions=waste_emissions,
+                               total_emissions=total_emissions)
 
-with col1:
-    st.subheader("🚗 Daily commute distance (in km)")
-    distance = st.slider("Distance", 0.0, 100.0, key="distance_input")
+    return render_template('index.html')
 
-    st.subheader("💡 Monthly electricity consumption (in kWh)")
-    electricity = st.slider("Electricity", 0.0, 1000.0, key="electricity_input")
-
-with col2:
-    st.subheader("🍽️ Waste generated per week (in kg)")
-    waste = st.slider("Waste", 0.0, 100.0, key="waste_input")
-
-    st.subheader("🍽️ Number of meals per day")
-    meals = st.number_input("Meals", 0, key="meals_input")
-
-# Normalize inputs
-if distance > 0:
-    distance = distance * 365  # Convert daily distance to yearly
-if electricity > 0:
-    electricity = electricity * 12  # Convert monthly electricity to yearly
-if meals > 0:
-    meals = meals * 365  # Convert daily meals to yearly
-if waste > 0:
-    waste = waste * 52  # Convert weekly waste to yearly
-
-# Calculate carbon emissions
-transportation_emissions = EMISSION_FACTORS[country]["Transportation"] * distance
-electricity_emissions = EMISSION_FACTORS[country]["Electricity"] * electricity
-diet_emissions = EMISSION_FACTORS[country]["Diet"] * meals
-waste_emissions = EMISSION_FACTORS[country]["Waste"] * waste
-
-# Convert emissions to tonnes and round off to 2 decimal points
-transportation_emissions = round(transportation_emissions / 1000, 2)
-electricity_emissions = round(electricity_emissions / 1000, 2)
-diet_emissions = round(diet_emissions / 1000, 2)
-waste_emissions = round(waste_emissions / 1000, 2)
-
-# Calculate total emissions
-total_emissions = round(
-    transportation_emissions + electricity_emissions + diet_emissions + waste_emissions, 2
-)
-
-if st.button("Calculate CO2 Emissions"):
-
-    # Display results
-    st.header("Results")
-
-    col3, col4 = st.columns(2)
-
-    with col3:
-        st.subheader("Carbon Emissions by Category")
-        st.info(f"🚗 Transportation: {transportation_emissions} tonnes CO2 per year")
-        st.info(f"💡 Electricity: {electricity_emissions} tonnes CO2 per year")
-        st.info(f"🍽️ Diet: {diet_emissions} tonnes CO2 per year")
-        st.info(f"🗑️ Waste: {waste_emissions} tonnes CO2 per year")
-
-    with col4:
-        st.subheader("Total Carbon Footprint")
-        st.success(f"🌍 Your total carbon footprint is: {total_emissions} tonnes CO2 per year")
+if __name__ == '__main__':
+    app.run(debug=True)
